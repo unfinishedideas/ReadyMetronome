@@ -48,6 +48,10 @@ pub struct App {
     pub first_edit: bool, // this is used to overwrite the original metronome setting text upon opening the edit window
     pub sound_list: Vec<String>,
     pub tick_rate: u64,
+    pub volume_min: f64,
+    pub volume_max: f64,
+    pub bpm_min: u64,
+    pub bpm_max: u64,
 }
 
 impl App {
@@ -88,6 +92,10 @@ impl App {
             first_edit: true,
             sound_list: Vec::new(),
             tick_rate: set_tick_rate,
+            volume_min: 1.0,
+            volume_max: 300.0,
+            bpm_min: 20,
+            bpm_max: 500,
         }
     }
 
@@ -133,31 +141,9 @@ impl App {
         self.check_error_status();
     }
 
-    // Added these helper functions so app is in charge of its own atomics
-    pub fn get_bpm(&mut self) -> u64 {
-        self.settings.bpm.load(Ordering::Relaxed)
-    }
-    pub fn get_volume(&mut self) -> f64 {
-        self.settings.volume.load(Ordering::Relaxed)
-    }
-    pub fn get_is_running(&mut self) -> bool {
-        self.settings.is_running.load(Ordering::Relaxed)
-    }
-    pub fn get_time_sig_string(&mut self) -> String {
-        let note = self.settings.ts_note.load(Ordering::Relaxed).to_string();
-        let value = self.settings.ts_value.load(Ordering::Relaxed).to_string();
-        note + "/" + &value
-    }
-    pub fn get_bar_count_string(&mut self) -> String {
-        self.settings.bar_count.load(Ordering::Relaxed).to_string()
-    }
-    pub fn get_selected_sound_string(&mut self) -> String {
-        self.sound_list[self.settings.selected_sound.load(Ordering::Relaxed)].to_string()
-    }
-
     // Metronome settings change functions
     pub fn change_bpm(&mut self, new_bpm: u64) {
-        if !(self.verify_bpm(new_bpm)) {
+        if !(self.u64_in_range(new_bpm, self.bpm_min, self.bpm_max)) {
             return;
         }
         self.settings.bpm.swap(new_bpm, Ordering::Relaxed);
@@ -165,15 +151,17 @@ impl App {
         self.settings.ns_delay.swap(new_ns, Ordering::Relaxed);
     }
 
-    fn verify_bpm(&mut self, test_bpm: u64) -> bool {
-        if (20..=500).contains(&test_bpm) {
+    pub fn u64_in_range(&mut self, value: u64, low: u64, high: u64) -> bool
+    {
+        if (low..=high).contains(&value) {
             return true;
         }
         false
     }
 
-    fn verify_volume(&mut self, test_vol: f64) -> bool {
-        if (1.0..=200.0).contains(&test_vol) {
+    pub fn f64_in_range(&mut self, value: f64, low: f64, high: f64) -> bool
+    {
+        if (low..=high).contains(&value) {
             return true;
         }
         false
@@ -188,7 +176,7 @@ impl App {
                 Ok(new_value) => new_value,
                 Err(_) => return false,
             };
-            if self.verify_bpm(new_bpm) {
+            if self.u64_in_range(new_bpm, self.bpm_min, self.bpm_max) {
                 self.settings.bpm.swap(new_bpm, Ordering::Relaxed);
                 let new_ns_delay = self.get_ns_for_note_value();
                 self.settings.ns_delay.swap(new_ns_delay, Ordering::Relaxed);
@@ -210,7 +198,7 @@ impl App {
                 Ok(new_value) => new_value,
                 Err(_) => return false,
             };
-            if self.verify_volume(new_volume) {
+            if self.f64_in_range(new_volume, self.volume_min, self.volume_max) {
                 self.settings.volume.swap(new_volume, Ordering::Relaxed);
                 self.clear_strings();
                 self.currently_editing = None;
@@ -669,6 +657,28 @@ impl App {
             _ => {}
         }
     }
+    
+    // Added these helper functions so app is in charge of its own atomics --------------------------------------
+    pub fn get_bpm(&mut self) -> u64 {
+        self.settings.bpm.load(Ordering::Relaxed)
+    }
+    pub fn get_volume(&mut self) -> f64 {
+        self.settings.volume.load(Ordering::Relaxed)
+    }
+    pub fn get_is_running(&mut self) -> bool {
+        self.settings.is_running.load(Ordering::Relaxed)
+    }
+    pub fn get_time_sig_string(&mut self) -> String {
+        let note = self.settings.ts_note.load(Ordering::Relaxed).to_string();
+        let value = self.settings.ts_value.load(Ordering::Relaxed).to_string();
+        note + "/" + &value
+    }
+    pub fn get_bar_count_string(&mut self) -> String {
+        self.settings.bar_count.load(Ordering::Relaxed).to_string()
+    }
+    pub fn get_selected_sound_string(&mut self) -> String {
+        self.sound_list[self.settings.selected_sound.load(Ordering::Relaxed)].to_string()
+    }
 }
 
 // Tests ---------------------------------------------------------------------------------------------------------------
@@ -823,25 +833,29 @@ mod tests {
         assert!(test_app.alert_string.is_empty());
     }
 
-    // app::verify_bpm should correctly determine which values are in range
+    // app::u64_in_range should correctly determine which values are in range
     #[test]
-    fn app_verify_bpm() {
+    fn app_u64_in_range() {
         let mut test_app = App::new(TEST_SETTINGS, TEST_TICK_RATE);
-        assert_eq!(test_app.verify_bpm(19), false);
-        assert_eq!(test_app.verify_bpm(501), false);
-        assert_eq!(test_app.verify_bpm(120), true);
-        assert_eq!(test_app.verify_bpm(500), true);
-        assert_eq!(test_app.verify_bpm(20), true);
+        let min :u64 = 20;
+        let max :u64 = 500;
+        assert_eq!(test_app.u64_in_range(19, min, max), false);
+        assert_eq!(test_app.u64_in_range(501, min, max), false);
+        assert_eq!(test_app.u64_in_range(120, min, max), true);
+        assert_eq!(test_app.u64_in_range(500, min, max), true);
+        assert_eq!(test_app.u64_in_range(20, min, max), true);
     }
 
-    // app::verify_volume should correctly determine which values are in range
+    // app::f64_in_range should correctly determine which values are in range
     #[test]
-    fn app_verify_volume() {
+    fn app_f64_in_range() {
         let mut test_app = App::new(TEST_SETTINGS, TEST_TICK_RATE);
-        assert_eq!(test_app.verify_volume(0.0), false);
-        assert_eq!(test_app.verify_volume(201.0), false);
-        assert_eq!(test_app.verify_volume(120.0), true);
-        assert_eq!(test_app.verify_volume(200.0), true);
-        assert_eq!(test_app.verify_volume(1.0), true);
+        let min :f64 = 1.0;
+        let max :f64 = 200.0; 
+        assert_eq!(test_app.f64_in_range(0.0, min, max), false);
+        assert_eq!(test_app.f64_in_range(201.0, min, max), false);
+        assert_eq!(test_app.f64_in_range(120.0, min, max), true);
+        assert_eq!(test_app.f64_in_range(200.0, min, max), true);
+        assert_eq!(test_app.f64_in_range(1.0, min, max), true);
     }
 }
