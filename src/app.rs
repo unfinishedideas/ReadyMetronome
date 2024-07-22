@@ -480,7 +480,7 @@ impl App {
                                     self.first_edit = true;
                                 } else {
                                     self.alert_string =
-                                        "Something went wrong, make sure to use the format X / X"
+                                        "Something went wrong, make sure to use the format X/X"
                                             .to_owned();
                                 }
                             }
