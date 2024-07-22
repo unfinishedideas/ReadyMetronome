@@ -31,6 +31,7 @@ pub enum CurrentScreen {
 pub enum CurrentlyEditing {
     Bpm,
     Volume,
+    TimeSignature,
 }
 
 pub struct App {
@@ -103,10 +104,7 @@ impl App {
         };
         let ns_delay = self.get_ns_for_note_value();
         self.settings.ns_delay.swap(ns_delay, Ordering::Relaxed);
-        let beats_per_bar = self.get_beats_per_bar();
-        self.settings
-            .beats_per_bar
-            .swap(beats_per_bar, Ordering::Relaxed);
+        self.update_beats_per_bar();
     }
 
     fn populate_sounds(&mut self) -> Result<(), Report> {
@@ -150,6 +148,13 @@ impl App {
         let value = self.settings.ts_value.load(Ordering::Relaxed).to_string();
         note + "/" + &value
     }
+    /*
+    pub fn get_time_sig_values(&mut self) -> (u64, u64) {
+        let note = self.settings.ts_note.load(Ordering::Relaxed);
+        let value = self.settings.ts_value.load(Ordering::Relaxed);
+        (note, value)
+    }
+    */
     pub fn get_bar_count_string(&mut self) -> String {
         self.settings.bar_count.load(Ordering::Relaxed).to_string()
     }
@@ -181,6 +186,7 @@ impl App {
         false
     }
 
+    // functions to change these values from the editor
     pub fn change_bpm_editor(&mut self) -> bool {
         if self.edit_string.is_empty() {
             false
@@ -220,6 +226,33 @@ impl App {
                 self.edit_string.clear();
                 false
             }
+        }
+    }
+
+    pub fn change_signature(&mut self) -> bool {
+        if self.edit_string.is_empty() {
+            false
+        } else {
+            // TODO: This is pretty restrictive
+            let v :Vec<&str> = self.edit_string.split("/").collect();
+            let new_ts_beats = match v[0].parse() {
+                Ok(new_value) => new_value,
+                Err(_) => return false
+            };
+            let new_ts_value = match v[1].parse() {
+                Ok(new_value) => new_value,
+                Err(_) => return false
+            };
+            let new_ns = self.get_ns_for_note_value();
+
+            self.settings.ts_note.swap(new_ts_beats, Ordering::Relaxed);
+            self.settings.ts_value.swap(new_ts_value, Ordering::Relaxed);
+            self.settings.ns_delay.swap(new_ns, Ordering::Relaxed);
+            self.update_beats_per_bar();
+
+            self.clear_strings();
+            self.currently_editing = None;
+            true
         }
     }
 
@@ -272,7 +305,7 @@ impl App {
     }
 
     // Calculate and return the number of metronome beats per bar (based on time signature and subdivision)
-    fn get_beats_per_bar(&mut self) -> u64 {
+    fn update_beats_per_bar(&mut self) {
         let mut num_ticks = self.settings.ts_note.load(Ordering::Relaxed);
         if self.settings.ts_triplets.load(Ordering::Relaxed) {
             num_ticks = (num_ticks as f64 * 1.5_f64).round() as u64;
@@ -282,7 +315,7 @@ impl App {
         } else if self.settings.sub_sixteens.load(Ordering::Relaxed) {
             num_ticks *= 4;
         }
-        num_ticks
+        self.settings.beats_per_bar.swap(num_ticks, Ordering::Relaxed);
     }
 
     pub fn clear_strings(&mut self) {
@@ -446,6 +479,15 @@ impl App {
                                         "Please input a value between 1.0 and 200.0".to_owned();
                                 }
                             }
+                            CurrentlyEditing::TimeSignature => {
+                                if self.change_signature() {
+                                    self.edit_menu.select(3);
+                                    self.first_edit = true;
+                                } else {
+                                    self.alert_string =
+                                    "Something went wrong, make sure to use the format X / X".to_owned();
+                                }
+                            }
                         }
                     } else {
                         // Main edit menu --------------------------------------------
@@ -474,7 +516,9 @@ impl App {
                             }
                             4 => {
                                 // edit time signature
-                                // TODO: Add the editing functionality for this :)
+                                self.edit_string = self.get_time_sig_string();
+                                self.currently_editing = Some(CurrentlyEditing::TimeSignature);
+                                self.edit_menu.deselect();
                             }
                             5 => {
                                 // bar count display, do nothing
