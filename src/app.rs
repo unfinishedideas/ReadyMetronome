@@ -148,13 +148,6 @@ impl App {
         let value = self.settings.ts_value.load(Ordering::Relaxed).to_string();
         note + "/" + &value
     }
-    /*
-    pub fn get_time_sig_values(&mut self) -> (u64, u64) {
-        let note = self.settings.ts_note.load(Ordering::Relaxed);
-        let value = self.settings.ts_value.load(Ordering::Relaxed);
-        (note, value)
-    }
-    */
     pub fn get_bar_count_string(&mut self) -> String {
         self.settings.bar_count.load(Ordering::Relaxed).to_string()
     }
@@ -234,14 +227,14 @@ impl App {
             false
         } else {
             // TODO: This is pretty restrictive
-            let v :Vec<&str> = self.edit_string.split("/").collect();
+            let v: Vec<&str> = self.edit_string.split('/').collect();
             let new_ts_beats = match v[0].parse() {
                 Ok(new_value) => new_value,
-                Err(_) => return false
+                Err(_) => return false,
             };
             let new_ts_value = match v[1].parse() {
                 Ok(new_value) => new_value,
-                Err(_) => return false
+                Err(_) => return false,
             };
             let new_ns = self.get_ns_for_note_value();
 
@@ -315,7 +308,9 @@ impl App {
         } else if self.settings.sub_sixteens.load(Ordering::Relaxed) {
             num_ticks *= 4;
         }
-        self.settings.beats_per_bar.swap(num_ticks, Ordering::Relaxed);
+        self.settings
+            .beats_per_bar
+            .swap(num_ticks, Ordering::Relaxed);
     }
 
     pub fn clear_strings(&mut self) {
@@ -485,7 +480,8 @@ impl App {
                                     self.first_edit = true;
                                 } else {
                                     self.alert_string =
-                                    "Something went wrong, make sure to use the format X / X".to_owned();
+                                        "Something went wrong, make sure to use the format X / X"
+                                            .to_owned();
                                 }
                             }
                         }

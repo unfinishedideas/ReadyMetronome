@@ -155,10 +155,13 @@ pub fn ui(f: &mut Frame, app: &mut App) {
             }
             CurrentlyEditing::TimeSignature => {
                 key_block = Block::default()
-                .title("Enter new Time Signature")
-                .borders(Borders::ALL);
-                original_block = Block::default().title("Current Time Signature (match format!)").borders(Borders::ALL);
-                original_text = Paragraph::new(app.get_time_sig_string().to_string()).block(original_block);
+                    .title("Enter new Time Signature")
+                    .borders(Borders::ALL);
+                original_block = Block::default()
+                    .title("Current Time Signature (match format!)")
+                    .borders(Borders::ALL);
+                original_text =
+                    Paragraph::new(app.get_time_sig_string().to_string()).block(original_block);
             }
         }
         // get the current state of the edit_string for display while editing
